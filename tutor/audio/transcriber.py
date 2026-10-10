@@ -27,7 +27,8 @@ def transcribe(
     client = client or get_client()
 
     with inference_errors("transcription"):
-        result = client.automatic_speech_recognition(audio, model=settings.asr_model)
+        # Pass a str, not a Path: some provider helpers (e.g. fal-ai) only accept str or bytes.
+        result = client.automatic_speech_recognition(str(audio), model=settings.asr_model)
 
     text = (result.text or "").strip()
     if not text:

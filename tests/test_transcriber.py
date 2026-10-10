@@ -13,7 +13,9 @@ def test_returns_stripped_text_using_configured_model(client, settings, mp3):
     )
 
     assert transcribe(mp3, client=client, settings=settings) == "Bonjour tout le monde."
-    client.automatic_speech_recognition.assert_called_once_with(mp3, model="test/asr")
+    client.automatic_speech_recognition.assert_called_once_with(str(mp3), model="test/asr")
+    # Provider helpers such as fal-ai base64-encode anything that isn't a str, so a Path crashes.
+    assert type(client.automatic_speech_recognition.call_args.args[0]) is str
 
 
 def test_invalid_upload_never_calls_api(client, settings, tmp_path):
