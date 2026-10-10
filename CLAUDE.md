@@ -121,6 +121,7 @@ The repo is the Space's source. Deploy via GitHub Action:
    colorTo: red
    sdk: gradio
    sdk_version: <match the Gradio version in uv.lock>
+   python_version: "3.11"   # matches .python-version; Spaces otherwise default to 3.10
    app_file: app.py
    pinned: false
    ---
