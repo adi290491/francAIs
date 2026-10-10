@@ -129,6 +129,8 @@ The repo is the Space's source. Deploy via GitHub Action:
 2. Spaces install from `requirements.txt`, not uv. Regenerate it whenever dependencies change:
    `uv export --no-hashes --no-dev --format requirements-txt > requirements.txt`
    and commit it in the same commit as the `pyproject.toml` change.
+   The Space installs `requirements.txt` together with its own extras (`gradio[oauth,mcp]==<sdk_version>`, `spaces`, `torch`) on Python 3.10, so check that the combination resolves before pushing (the pydantic cap in `[tool.uv] constraint-dependencies` exists for this reason):
+   `uv venv /tmp/space-check --python 3.10 && VIRTUAL_ENV=/tmp/space-check uv pip install --dry-run -r requirements.txt "gradio[oauth,mcp]==<sdk_version>" spaces`
 3. `.github/workflows/deploy-to-hf.yml` runs on push to `master` and force-pushes it to the `main` branch of `https://huggingface.co/spaces/<HF_USERNAME>/<SPACE_NAME>` (e.g. `git push --force <remote> master:main` — Spaces build from `main`), authenticated with a GitHub Actions secret `HF_TOKEN` (write-scoped). Put the username and Space name in workflow `env:` variables, not inline.
 4. The Space needs its own secret `HF_TOKEN` (read/inference-scoped) set in the Space settings for the inference calls.
 

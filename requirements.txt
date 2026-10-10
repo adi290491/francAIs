@@ -115,11 +115,11 @@ pandas==3.0.6 ; python_full_version >= '3.11'
     # via gradio
 pillow==12.3.0
     # via gradio
-pydantic==2.14.0
+pydantic==2.12.5
     # via
     #   fastapi
     #   gradio
-pydantic-core==2.50.0
+pydantic-core==2.41.5
     # via pydantic
 pydub==0.25.1
     # via gradio

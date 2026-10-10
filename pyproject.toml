@@ -16,6 +16,11 @@ dev = [
     "ruff>=0.17.0",
 ]
 
+[tool.uv]
+# HF Gradio Spaces install `gradio[oauth,mcp]` on top of requirements.txt; its mcp extra
+# caps pydantic, so the lock must stay inside that range or the Space build fails.
+constraint-dependencies = ["pydantic>=2.11.10,<=2.12.5"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
