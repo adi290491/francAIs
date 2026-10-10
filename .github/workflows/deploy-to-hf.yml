@@ -10,22 +10,24 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Repository variables: Settings → Secrets and variables → Actions → Variables
+  # Defined in the "hf env" Environment: Settings → Environments → hf env
   HF_USERNAME: ${{ vars.HF_USERNAME }}
   SPACE_NAME: ${{ vars.SPACE_NAME }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # HF_USERNAME, SPACE_NAME (variables) and HF_TOKEN (secret) live in this GitHub Environment.
+    environment: hf env
     steps:
       - name: Check deploy configuration
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           missing=0
-          [ -n "$HF_USERNAME" ] || { echo "::error::Repository variable HF_USERNAME is not set"; missing=1; }
-          [ -n "$SPACE_NAME" ] || { echo "::error::Repository variable SPACE_NAME is not set"; missing=1; }
-          [ -n "$HF_TOKEN" ] || { echo "::error::Repository secret HF_TOKEN is not set"; missing=1; }
+          [ -n "$HF_USERNAME" ] || { echo "::error::Variable HF_USERNAME is not set in the 'hf env' environment"; missing=1; }
+          [ -n "$SPACE_NAME" ] || { echo "::error::Variable SPACE_NAME is not set in the 'hf env' environment"; missing=1; }
+          [ -n "$HF_TOKEN" ] || { echo "::error::Secret HF_TOKEN is not set in the 'hf env' environment"; missing=1; }
           exit $missing
 
       - uses: actions/checkout@v7
