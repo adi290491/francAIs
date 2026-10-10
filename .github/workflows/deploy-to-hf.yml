@@ -10,8 +10,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  HF_USERNAME: your-hf-username # TODO: set to your Hugging Face username
-  SPACE_NAME: french-tutor # TODO: set to your Space name
+  # Repository variables: Settings → Secrets and variables → Actions → Variables
+  HF_USERNAME: ${{ vars.HF_USERNAME }}
+  SPACE_NAME: ${{ vars.SPACE_NAME }}
 
 jobs:
   deploy:
