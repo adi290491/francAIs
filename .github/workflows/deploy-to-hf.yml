@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Check deploy configuration
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_TOKEN: ${{ vars.HF_TOKEN }}
         run: |
           missing=0
           [ -n "$HF_USERNAME" ] || { echo "::error::Repository variable HF_USERNAME is not set"; missing=1; }
