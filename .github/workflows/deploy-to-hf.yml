@@ -18,6 +18,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check deploy configuration
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          missing=0
+          [ -n "$HF_USERNAME" ] || { echo "::error::Repository variable HF_USERNAME is not set"; missing=1; }
+          [ -n "$SPACE_NAME" ] || { echo "::error::Repository variable SPACE_NAME is not set"; missing=1; }
+          [ -n "$HF_TOKEN" ] || { echo "::error::Repository secret HF_TOKEN is not set"; missing=1; }
+          exit $missing
+
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
