@@ -23,7 +23,7 @@ Out of scope for v1: microphone recording, user accounts, saving history, any da
 
 ## Tech stack
 
-- **Python 3.11+**
+- **Python 3.10+** (the HF Gradio Space builds on 3.10 regardless of `python_version`, so the lock must resolve for 3.10)
 - **uv** for dependency and environment management (`pyproject.toml` + `uv.lock` are the source of truth)
 - **Gradio** 6.x (pinned to the latest stable in `pyproject.toml`) for the UI
 - **huggingface_hub** `InferenceClient` for all model calls — no models run locally
@@ -121,7 +121,7 @@ The repo is the Space's source. Deploy via GitHub Action:
    colorTo: red
    sdk: gradio
    sdk_version: <match the Gradio version in uv.lock>
-   python_version: "3.11"   # matches .python-version; Spaces otherwise default to 3.10
+   python_version: "3.10"   # matches .python-version and the Space build image
    app_file: app.py
    pinned: false
    ---
