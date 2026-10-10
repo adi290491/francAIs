@@ -64,7 +64,7 @@ httpx==0.28.1
     #   safehttpx
 httpx2==2.13.1
     # via huggingface-hub
-httpx2-jsfetch==1.0 ; python_full_version >= '3.12' and sys_platform == 'emscripten'
+httpx2-jsfetch==1.0 ; python_full_version >= '3.10' and sys_platform == 'emscripten'
     # via httpx2
 huggingface-hub==2.2.0
     # via
@@ -86,11 +86,11 @@ markupsafe==3.0.4
     #   jinja2
 mdurl==0.1.2
     # via markdown-it-py
-numpy==2.4.6 ; python_full_version < '3.12'
+numpy==2.4.6 ; python_full_version < '3.10'
     # via
     #   gradio
     #   pandas
-numpy==2.5.3 ; python_full_version >= '3.12'
+numpy==2.5.3 ; python_full_version >= '3.10'
     # via
     #   gradio
     #   pandas
