@@ -116,7 +116,7 @@ The repo is the Space's source. Deploy via GitHub Action:
    ```yaml
    ---
    title: French Tutor
-   emoji: 🇫🇷
+   emoji: 🥐   # HF requires an Extended_Pictographic emoji; flag emoji are rejected
    colorFrom: blue
    colorTo: red
    sdk: gradio
