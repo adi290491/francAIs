@@ -30,6 +30,7 @@ def test_invalid_upload_never_calls_api(client, settings, tmp_path):
     [
         (429, "too many requests"),
         (413, "too large"),
+        (402, "out of inference credits"),
         (401, "token was rejected"),
         (404, "not available"),
         (503, "temporarily unavailable"),

@@ -45,6 +45,8 @@ def _message_for_status(task: str, status: int) -> str:
         return f"The {task} service is receiving too many requests. Please wait a minute and retry."
     if status == 413:
         return "The recording is too large for the hosted model. Please upload a shorter clip."
+    if status == 402:
+        return "The Hugging Face account has run out of inference credits. Please try again later."
     if status in (401, 403):
         return "The Hugging Face token was rejected. Check that HF_TOKEN is valid."
     if status == 404:
