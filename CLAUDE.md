@@ -1,4 +1,8 @@
-# CLAUDE.md — French Tutor (v1)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# French Tutor (v1)
 
 ## Project overview
 
@@ -13,7 +17,7 @@ Later versions will add tutoring features (vocabulary, quizzes, conversation pra
 3. **Translate button** — translates the uploaded audio to English text.
 4. **Output textarea** — one multi-line textbox that shows the result of whichever button was last pressed.
 5. **Gradio UI** — single page, Gradio Blocks.
-6. **Hugging Face deployment** — the app runs as a Gradio Space and redeploys automatically when `main` is pushed to GitHub.
+6. **Hugging Face deployment** — the app runs as a Gradio Space and redeploys automatically when `master` is pushed to GitHub.
 
 Out of scope for v1: microphone recording, user accounts, saving history, any database, multiple languages other than French→English, streaming output.
 
@@ -21,7 +25,7 @@ Out of scope for v1: microphone recording, user accounts, saving history, any da
 
 - **Python 3.11+**
 - **uv** for dependency and environment management (`pyproject.toml` + `uv.lock` are the source of truth)
-- **Gradio** (current stable 5.x) for the UI
+- **Gradio** 6.x (pinned to the latest stable in `pyproject.toml`) for the UI
 - **huggingface_hub** `InferenceClient` for all model calls — no models run locally
 - **python-dotenv** for loading `HF_TOKEN` in local development
 - **pytest** for tests
@@ -33,19 +37,30 @@ Do not add other dependencies without asking first.
 
 ```
 .
-├── app.py                  # Gradio UI only. Entry point for the HF Space. No business logic here.
-├── tutor/
-│   ├── __init__.py
-│   ├── config.py           # Reads env vars: HF_TOKEN, model IDs, limits
-│   ├── audio.py            # Upload validation (extension, size, non-empty)
-│   ├── transcriber.py      # transcribe(path) -> str  (French text)
-│   └── translator.py       # translate_audio(path) -> str  (English text)
+├── app.py                  # HF Space entry point only: load settings, build UI, launch.
+├── tutor/                  # Business logic. Never imports gradio or ui.
+│   ├── core/               # Shared infrastructure used by every feature
+│   │   ├── config.py       # Settings dataclass from env vars: HF_TOKEN, model IDs, limits
+│   │   ├── client.py       # The single shared InferenceClient factory
+│   │   ├── errors.py       # TutorError hierarchy (user-safe messages)
+│   │   └── inference.py    # Maps provider exceptions (timeout/429/413/…) to TutorError
+│   └── audio/              # Feature: audio tools
+│       ├── validation.py   # Upload validation (extension, size, non-empty)
+│       ├── transcriber.py  # transcribe(path) -> str  (French text)
+│       └── translator.py   # translate_audio(path) -> str  (English text)
+├── ui/                     # Gradio presentation layer. Depends on tutor, not vice versa.
+│   ├── app.py              # build_demo(): composes feature views into one Blocks app
+│   ├── handlers.py         # Adapts tutor functions to Gradio (TutorError -> gr.Error, etc.)
+│   └── features/
+│       └── audio_tools.py  # render(): upload, buttons, output for the audio feature
 ├── tests/
+│   ├── test_config.py
 │   ├── test_audio.py
 │   ├── test_transcriber.py
-│   └── test_translator.py
+│   ├── test_translator.py
+│   └── test_ui_handlers.py
 ├── .github/workflows/
-│   └── deploy-to-hf.yml    # Syncs main to the HF Space
+│   └── deploy-to-hf.yml    # Syncs master to the HF Space
 ├── pyproject.toml
 ├── uv.lock
 ├── requirements.txt        # GENERATED from uv for the HF Space — never edit by hand
@@ -55,9 +70,11 @@ Do not add other dependencies without asking first.
 ```
 
 Rules:
-- `app.py` wires UI events to functions in `tutor/`. It contains no API calls and no validation logic.
-- Each function in `tutor/` is plain Python with no Gradio imports, so it can be unit-tested and reused by future interfaces.
-- Create one shared `InferenceClient` in a single place (e.g. a small factory in `config.py`) rather than in every module.
+- Dependency direction is `app.py` → `ui/` → `tutor/`. `ui/` contains no API calls and no validation logic; `tutor/` has no Gradio imports, so it can be unit-tested and reused by future interfaces.
+- `tutor/` functions take `client` and `settings` as optional keyword arguments (defaulting to the shared ones). Tests inject fakes instead of patching globals.
+- `tutor/` raises `TutorError` subclasses whose message is safe to show users; `ui/handlers.py` is the only place that turns them into `gr.Error` / `gr.Warning`.
+- Create one shared `InferenceClient` in a single place (`tutor/core/client.py`) rather than in every module.
+- Adding a feature: new sub-package under `tutor/` (e.g. `tutor/vocabulary/`), a new `ui/features/<name>.py` with a `render()` function, and one line in `ui/app.py` to include it (e.g. inside a new `gr.Tab`).
 
 ## Model calls (Hugging Face Inference API)
 
@@ -77,6 +94,7 @@ Important:
 
 - Reject anything that isn't `.mp3` (check the extension, case-insensitive) with a clear message.
 - Reject empty files and files over a configurable size limit (`MAX_UPLOAD_MB`, default 25). Hosted inference has payload limits, so long recordings may fail — surface that clearly rather than crashing.
+- Inference calls time out after `INFERENCE_TIMEOUT_S` seconds (default 120) so a stuck provider can't hang the UI.
 - If `HF_TOKEN` is missing, fail at startup with a message that says exactly what to set.
 - Wrap inference calls: on timeouts, rate limits (HTTP 429), or provider errors, show a friendly message in the UI with `gr.Error` / `gr.Warning`. Log the technical detail with the `logging` module; never show tokens or stack traces in the UI.
 - If either button is clicked with no file uploaded, show a warning instead of calling the API.
@@ -86,7 +104,7 @@ Important:
 - Title: "French Tutor" with a one-line description.
 - `gr.Audio(sources=["upload"], type="filepath", label="Upload French audio (.mp3)")` — gives the user playback of their file.
 - Two buttons side by side: **Transcribe (French)** and **Translate (English)**.
-- `gr.Textbox(lines=12, label="Output", interactive=False, show_copy_button=True)`.
+- `gr.Textbox(lines=12, label="Output", interactive=False, buttons=["copy"])` (Gradio 6 replaced `show_copy_button` with `buttons`).
 - While a request runs, the buttons should show progress (Gradio's default queue/progress is fine).
 - `app.py` ends with `demo.launch()` and must not hardcode a host or port, so it works both locally and on Spaces.
 
@@ -110,7 +128,7 @@ The repo is the Space's source. Deploy via GitHub Action:
 2. Spaces install from `requirements.txt`, not uv. Regenerate it whenever dependencies change:
    `uv export --no-hashes --no-dev --format requirements-txt > requirements.txt`
    and commit it in the same commit as the `pyproject.toml` change.
-3. `.github/workflows/deploy-to-hf.yml` runs on push to `main` and force-pushes the repo to `https://huggingface.co/spaces/<HF_USERNAME>/<SPACE_NAME>`, authenticated with a GitHub Actions secret `HF_TOKEN` (write-scoped). Put the username and Space name in workflow `env:` variables, not inline.
+3. `.github/workflows/deploy-to-hf.yml` runs on push to `master` and force-pushes it to the `main` branch of `https://huggingface.co/spaces/<HF_USERNAME>/<SPACE_NAME>` (e.g. `git push --force <remote> master:main` — Spaces build from `main`), authenticated with a GitHub Actions secret `HF_TOKEN` (write-scoped). Put the username and Space name in workflow `env:` variables, not inline.
 4. The Space needs its own secret `HF_TOKEN` (read/inference-scoped) set in the Space settings for the inference calls.
 
 Manual steps I (the developer) will do — list them for me when you finish, don't attempt them: create the Space on huggingface.co, create the two tokens, and add the GitHub and Space secrets.
@@ -121,6 +139,7 @@ Manual steps I (the developer) will do — list them for me when you finish, don
 uv sync                      # install deps
 uv run python app.py         # run locally at http://127.0.0.1:7860
 uv run pytest                # tests
+uv run pytest tests/test_audio.py::test_name -v   # single test
 uv run ruff check . && uv run ruff format .
 uv add <pkg>                 # add a dependency (then regenerate requirements.txt)
 ```
