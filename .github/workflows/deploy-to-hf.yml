@@ -34,7 +34,7 @@ jobs:
 
       - name: Push master to the Space's main branch
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_TOKEN: ${{ vars.HF_TOKEN }}
         run: |
           git push --force \
             "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${SPACE_NAME}" \
