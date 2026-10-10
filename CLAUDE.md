@@ -133,6 +133,7 @@ The repo is the Space's source. Deploy via GitHub Action:
    `uv venv /tmp/space-check --python 3.10 && VIRTUAL_ENV=/tmp/space-check uv pip install --dry-run -r requirements.txt "gradio[oauth,mcp]==<sdk_version>" spaces`
 3. `.github/workflows/deploy-to-hf.yml` runs on push to `master` and force-pushes it to the `main` branch of `https://huggingface.co/spaces/<HF_USERNAME>/<SPACE_NAME>` (e.g. `git push --force <remote> master:main` — Spaces build from `main`), authenticated with a GitHub Actions secret `HF_TOKEN` (write-scoped). Put the username and Space name in workflow `env:` variables, not inline.
 4. The Space needs its own secret `HF_TOKEN` (read/inference-scoped) set in the Space settings for the inference calls.
+5. The Space runs on ZeroGPU (the only free hardware; CPU basic needs PRO). ZeroGPU refuses to start without a `@spaces.GPU` function, so `app.py` imports the preinstalled `spaces` package first (optional locally) and defines a never-called placeholder. Keep all real work on hosted inference; don't add GPU code or list `spaces` as a dependency.
 
 Manual steps I (the developer) will do — list them for me when you finish, don't attempt them: create the Space on huggingface.co, create the two tokens, and add the GitHub and Space secrets.
 
