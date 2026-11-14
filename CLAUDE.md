@@ -19,7 +19,16 @@ Later versions will add tutoring features (vocabulary, quizzes, conversation pra
 5. **Gradio UI** — single page, Gradio Blocks.
 6. **Hugging Face deployment** — the app runs as a Gradio Space and redeploys automatically when `master` is pushed to GitHub.
 
-Out of scope for v1: microphone recording, user accounts, saving history, any database, multiple languages other than French→English, streaming output.
+## v2 scope (build exactly this)
+1. **Microphone recording** - accepts recording using available microphone options (system, phone, etc).
+2. **Toggler** - toggles between v1 upload mode and recording mode.
+3. **Transcribe button** - the transcribe button from v1 transcribes the recorded audio to French text. Force whisper to French text even on a hesitant recording.
+4. **Translate button** — translates the recorded audio to English text.
+5. **Fillers** - Keep the fillers from the recordings so passing a prompt like « Euh, alors… je, je voudrais… hum » keeps them instead of deleting.
+6. **Word-level timestamp** - Maintain any gaps between words allowing pause lengths and words per minute, real fluency measures.
+7. **temperature** - set to zero (0) for consistent, literal output.
+
+Out of scope for v1: user accounts, saving history, any database, multiple languages other than French→English, streaming output.
 
 ## Tech stack
 
@@ -40,25 +49,35 @@ Do not add other dependencies without asking first.
 ├── app.py                  # HF Space entry point only: load settings, build UI, launch.
 ├── tutor/                  # Business logic. Never imports gradio or ui.
 │   ├── core/               # Shared infrastructure used by every feature
-│   │   ├── config.py       # Settings dataclass from env vars: HF_TOKEN, model IDs, limits
-│   │   ├── client.py       # The single shared InferenceClient factory
+│   │   ├── config.py       # Settings dataclass from env vars: HF_TOKEN, model IDs, ASR_URL, limits
+│   │   ├── client.py       # The single shared InferenceClient factory (translation)
+│   │   ├── asr_api.py      # The one direct HTTP call: DeepInfra Whisper with word timings
 │   │   ├── errors.py       # TutorError hierarchy (user-safe messages)
 │   │   └── inference.py    # Maps provider exceptions (timeout/429/413/…) to TutorError
 │   └── audio/              # Feature: audio tools
-│       ├── validation.py   # Upload validation (extension, size, non-empty)
-│       ├── transcriber.py  # transcribe(path) -> str  (French text)
+│       ├── validation.py   # Validation by source: upload (.mp3) / recording (.wav); size, non-empty
+│       ├── transcriber.py  # transcribe_detailed(path) -> Transcript(text, words, duration);
+│       │                   #   transcribe(path) -> str  (French text)
+│       ├── fluency.py      # analyse/describe: pauses & words per minute; transcribe_with_fluency()
 │       └── translator.py   # translate_audio(path) -> str  (English text)
 ├── ui/                     # Gradio presentation layer. Depends on tutor, not vice versa.
 │   ├── app.py              # build_demo(): composes feature views into one Blocks app
 │   ├── handlers.py         # Adapts tutor functions to Gradio (TutorError -> gr.Error, etc.)
 │   └── features/
-│       └── audio_tools.py  # render(): upload, buttons, output for the audio feature
+│       └── audio_tools.py  # render(): mode toggle, upload + mic, buttons, Output + Fluency
 ├── tests/
+│   ├── conftest.py         # settings/client fixtures, FakeSession for the ASR HTTP call
+│   ├── sample_responses.py # a DeepInfra-shaped hesitant-French response
 │   ├── test_config.py
+│   ├── test_asr_api.py
 │   ├── test_audio.py
 │   ├── test_transcriber.py
+│   ├── test_fluency.py
 │   ├── test_translator.py
 │   └── test_ui_handlers.py
+├── docs/
+│   ├── PLAN.md             # v2 implementation plan (incl. the step 0 provider check)
+│   └── STATUS.md           # status of every v1/v2 scope item
 ├── .github/workflows/
 │   └── deploy-to-hf.yml    # Syncs master to the HF Space
 ├── pyproject.toml
@@ -71,40 +90,48 @@ Do not add other dependencies without asking first.
 
 Rules:
 - Dependency direction is `app.py` → `ui/` → `tutor/`. `ui/` contains no API calls and no validation logic; `tutor/` has no Gradio imports, so it can be unit-tested and reused by future interfaces.
-- `tutor/` functions take `client` and `settings` as optional keyword arguments (defaulting to the shared ones). Tests inject fakes instead of patching globals.
+- `tutor/` functions take `client` (or `session`, for the ASR HTTP call) and `settings` as optional keyword arguments (defaulting to the shared ones). Tests inject fakes instead of patching globals.
 - `tutor/` raises `TutorError` subclasses whose message is safe to show users; `ui/handlers.py` is the only place that turns them into `gr.Error` / `gr.Warning`.
-- Create one shared `InferenceClient` in a single place (`tutor/core/client.py`) rather than in every module.
+- Create one shared `InferenceClient` in a single place (`tutor/core/client.py`) rather than in every module. The only model call outside it is the ASR request in `tutor/core/asr_api.py` (see below).
 - Adding a feature: new sub-package under `tutor/` (e.g. `tutor/vocabulary/`), a new `ui/features/<name>.py` with a `render()` function, and one line in `ui/app.py` to include it (e.g. inside a new `gr.Tab`).
 
 ## Model calls (Hugging Face Inference API)
 
 Use `huggingface_hub.InferenceClient`, authenticated with `HF_TOKEN`.
 
-**Transcription** — `client.automatic_speech_recognition(audio_path, model=ASR_MODEL)`.
-Default `ASR_MODEL` to a Whisper model such as `openai/whisper-large-v3`. Return the `.text` field.
+**Transcription (v2)** — a direct `POST` to DeepInfra's OpenAI-compatible endpoint through the HF router, in `tutor/core/asr_api.py`. This is a deliberate, approved exception to "use `InferenceClient`": the v2 step 0 check (see `docs/PLAN.md`) found that `InferenceClient.automatic_speech_recognition` drops word timings for every provider, and hf-inference folds silences into words, so no client route gives real pause lengths.
+- URL: `ASR_URL`, default `https://router.huggingface.co/deepinfra/v1/openai/audio/transcriptions`. Auth: `Authorization: Bearer HF_TOKEN` (billed to the same HF credits).
+- `multipart/form-data`: `file`, `model=ASR_MODEL` (default `openai/whisper-large-v3`), `language=fr`, `temperature=0`, `prompt="Euh, alors… je, je voudrais… hum"` (keeps fillers), `response_format=verbose_json`, `timestamp_granularities[]=word`.
+- Uses `huggingface_hub.utils.get_session()` and `hf_raise_for_status()`, so HTTP errors surface as `HfHubHTTPError` and `inference_errors` maps them like any other call. No new dependency.
+- Response: `text`, `duration`, `words: [{word, start, end}]`. Split fragments (`" s"` + `"'il"`) are joined into one word.
+
+**Fluency** — `tutor/audio/fluency.py` turns word timings into words per minute (first word start → last word end) and pauses (gaps ≥ 0.25 s). Fillers count as words.
 
 **Translation** — two-step pipeline for v1: transcribe the audio to French with the function above, then translate the French text to English. Use `client.translation(...)` with a French→English model (e.g. `Helsinki-NLP/opus-mt-fr-en`), or `client.chat_completion(...)` with an instruct model if the translation endpoint isn't available for that model.
 
 Important:
 - **Before hardcoding any model ID, verify it is currently served by HF Inference Providers** (check the model page's "Inference Providers" panel or make a test call). Provider availability changes. Tell me which models you verified.
-- Make every model ID configurable through env vars (`ASR_MODEL`, `TRANSLATION_MODEL`) with defaults in `config.py`.
+- Make every model ID configurable through env vars (`ASR_MODEL`, `TRANSLATION_MODEL`, plus `ASR_URL` for the endpoint) with defaults in `config.py`.
 - The translate flow should reuse `transcriber.transcribe()`, not duplicate the ASR call.
 
 ## Validation and error handling
 
-- Reject anything that isn't `.mp3` (check the extension, case-insensitive) with a clear message.
+- Uploads: reject anything that isn't `.mp3` (check the extension, case-insensitive) with a clear message. Recordings: Gradio's microphone recorder always uploads `audio.wav`, so recordings must be `.wav`. Don't set `format="mp3"` on `gr.Audio` (it needs ffmpeg on the Space).
 - Reject empty files and files over a configurable size limit (`MAX_UPLOAD_MB`, default 25). Hosted inference has payload limits, so long recordings may fail — surface that clearly rather than crashing.
 - Inference calls time out after `INFERENCE_TIMEOUT_S` seconds (default 120) so a stuck provider can't hang the UI.
 - If `HF_TOKEN` is missing, fail at startup with a message that says exactly what to set.
 - Wrap inference calls: on timeouts, rate limits (HTTP 429), or provider errors, show a friendly message in the UI with `gr.Error` / `gr.Warning`. Log the technical detail with the `logging` module; never show tokens or stack traces in the UI.
-- If either button is clicked with no file uploaded, show a warning instead of calling the API.
+- If either button is clicked with no audio in the active mode, show a mode-specific warning ("Please upload an .mp3 file first." / "Please record some audio first.") instead of calling the API.
 
 ## UI spec (Gradio Blocks)
 
 - Title: "French Tutor" with a one-line description.
+- Mode toggle: `gr.Radio(["Upload", "Record"], value="Upload", label="Input")`. Changing it toggles `visible` on the two audio inputs; both keep their values.
 - `gr.Audio(sources=["upload"], type="filepath", label="Upload French audio (.mp3)")` — gives the user playback of their file.
-- Two buttons side by side: **Transcribe (French)** and **Translate (English)**.
+- `gr.Audio(sources=["microphone"], type="filepath", label="Record French audio", visible=False)` — the browser recorder offers every available microphone (built-in, headset, phone browser over the Space's HTTPS).
+- Two buttons side by side: **Transcribe (French)** and **Translate (English)** (API names `/transcribe`, `/translate`). Both act on the active mode's audio.
 - `gr.Textbox(lines=12, label="Output", interactive=False, buttons=["copy"])` (Gradio 6 replaced `show_copy_button` with `buttons`).
+- `gr.Textbox(lines=8, label="Fluency (pauses & pace)", interactive=False)` — filled by Transcribe ("Fluency measures unavailable for this recording." when timings are missing) and cleared by Translate.
 - While a request runs, the buttons should show progress (Gradio's default queue/progress is fine).
 - `app.py` ends with `demo.launch()` and must not hardcode a host or port, so it works both locally and on Spaces.
 
@@ -168,3 +195,4 @@ uv add <pkg>                 # add a dependency (then regenerate requirements.tx
 - Use clear conventional commit messages (`feat:`, `fix:`, `chore:`, `test:`).
 - Prefer simple, readable Python with type hints and short docstrings over clever abstractions.
 - If something in this file conflicts with what you find (a model is unavailable, a Gradio API changed), stop and tell me rather than silently working around it.
+- Create a `docs` folder and a new file in it named `STATUS.md` and add your final status for each scope. If any previous scope is not present, add the status of that scope too.

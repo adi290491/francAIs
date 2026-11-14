@@ -12,8 +12,17 @@ pinned: false
 
 # francAIs
 
-Personal French tutoring assistant. Upload a French `.mp3` to transcribe it to French text or
-translate it to English, using models served by Hugging Face Inference Providers.
+Personal French tutoring assistant. Upload a French `.mp3`, or switch to **Record** and speak
+into any microphone your browser offers, then:
+
+- **Transcribe (French)**: a literal French transcript (Whisper forced to French at temperature 0,
+  keeping fillers such as « euh » and « hum »), plus a **Fluency** panel with words per minute and
+  every pause of 0.25 s or more between words.
+- **Translate (English)**: the transcript translated to English.
+
+Models are served by Hugging Face Inference Providers: `openai/whisper-large-v3` on DeepInfra
+(called through the HF router for word-level timestamps) and `Helsinki-NLP/opus-mt-fr-en`.
+See [docs/STATUS.md](docs/STATUS.md) for what is built and its known limits.
 
 ## Run locally
 
