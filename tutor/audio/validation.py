@@ -1,9 +1,15 @@
 """Validation of audio files (uploads and microphone recordings), run before any model call."""
 
+import array
+import logging
+import sys
+import wave
 from pathlib import Path
 from typing import Literal
 
 from tutor.core.errors import AudioValidationError
+
+logger = logging.getLogger(__name__)
 
 AudioSource = Literal["upload", "recording"]
 
@@ -14,6 +20,15 @@ ALLOWED_EXTENSIONS: dict[str, frozenset[str]] = {
 }
 
 _NOUN = {"upload": "uploaded file", "recording": "recording"}
+
+# A recording whose loudest sample is below -60 dBFS has no speech in it: the microphone was
+# muted, disconnected, or not the one being spoken into. Whisper invents text for silence
+# (e.g. « Sous-titres réalisés par la communauté d'Amara.org »), so stop before the call.
+SILENCE_PEAK = 10 ** (-60 / 20)  # fraction of full scale
+SILENT_RECORDING_MESSAGE = (
+    "No sound was picked up in the recording. Check that the microphone selected in the "
+    "recorder is the one you are speaking into and that it isn't muted, then record again."
+)
 
 
 def validate_audio(path: str | Path, *, max_bytes: int, source: AudioSource = "upload") -> Path:
@@ -49,7 +64,30 @@ def validate_audio(path: str | Path, *, max_bytes: int, source: AudioSource = "u
             "Please use a shorter recording."
         )
 
+    if source == "recording" and _is_silent(audio):
+        raise AudioValidationError(SILENT_RECORDING_MESSAGE)
+
     return audio
+
+
+def _is_silent(audio: Path) -> bool:
+    """True if `audio` is a 16-bit PCM WAV (what Gradio's recorder writes) with no audible
+    sample. Files that can't be read this way are let through for the provider to judge."""
+    try:
+        with wave.open(str(audio), "rb") as wav:
+            if wav.getsampwidth() != 2:
+                return False
+            limit = SILENCE_PEAK * 32768
+            while chunk := wav.readframes(65536):
+                samples = array.array("h", chunk[: len(chunk) - len(chunk) % 2])
+                if sys.byteorder == "big":
+                    samples.byteswap()
+                if samples and max(abs(min(samples)), max(samples)) >= limit:
+                    return False
+            return True
+    except (wave.Error, EOFError) as exc:
+        logger.info("Skipping silence check for unreadable WAV: %s", exc)
+        return False
 
 
 def _mb(n_bytes: int) -> str:

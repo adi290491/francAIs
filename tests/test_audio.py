@@ -90,3 +90,48 @@ def test_unknown_source_is_a_programming_error(tmp_path):
     path = _stub(tmp_path, "clip.mp3", 100)
     with pytest.raises(ValueError):
         validate_audio(path, max_bytes=MAX_BYTES, source="stream")  # type: ignore[arg-type]
+
+
+# --- silent recordings (muted / wrong microphone) are rejected before any model call ---
+
+
+def _wav(tmp_path, samples: list[int], name: str = "audio.wav", sampwidth: int = 2):
+    import array
+    import wave
+
+    path = tmp_path / name
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(sampwidth)
+        wav.setframerate(16000)
+        if sampwidth == 2:
+            wav.writeframes(array.array("h", samples).tobytes())
+        else:
+            wav.writeframes(bytes(128 for _ in samples))
+    return path
+
+
+@pytest.mark.parametrize("level", [0, 20])  # digital silence, and a faint hiss below -60 dBFS
+def test_silent_recording_rejected(tmp_path, level):
+    path = _wav(tmp_path, [level, -level] * 8000)
+    with pytest.raises(AudioValidationError, match="No sound was picked up"):
+        validate_audio(path, max_bytes=10**7, source="recording")
+
+
+def test_audible_recording_accepted(tmp_path):
+    samples = [0] * 8000 + [3000, -3000] * 100 + [0] * 8000  # quiet, then speech-level peaks
+    path = _wav(tmp_path, samples)
+    assert validate_audio(path, max_bytes=10**7, source="recording") == path
+
+
+def test_negative_full_scale_peak_is_audible(tmp_path):
+    path = _wav(tmp_path, [0] * 100 + [-32768])
+    assert validate_audio(path, max_bytes=10**7, source="recording") == path
+
+
+def test_unreadable_or_non_16_bit_wav_is_left_to_the_provider(tmp_path):
+    stub = _stub(tmp_path, "audio.wav", 100)  # not a real WAV
+    eight_bit = _wav(tmp_path, [0] * 100, name="eight.wav", sampwidth=1)
+
+    assert validate_audio(stub, max_bytes=MAX_BYTES, source="recording") == stub
+    assert validate_audio(eight_bit, max_bytes=MAX_BYTES, source="recording") == eight_bit
