@@ -16,4 +16,5 @@ def build_demo() -> gr.Blocks:
     with gr.Blocks(title=TITLE) as demo:
         gr.Markdown(f"# {TITLE}\n{DESCRIPTION}")
         audio_tools.render()
+        demo.load(None, js=audio_tools.MIC_DEVICE_JS, api_name=False)
     return demo

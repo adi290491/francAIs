@@ -1,12 +1,17 @@
 """Audio tools view: upload an .mp3 or record from a microphone, then transcribe or translate."""
 
 from collections.abc import Callable
+from pathlib import Path
 
 import gradio as gr
 
 from tutor.audio.fluency import transcribe_with_fluency
 from tutor.audio.translator import translate_audio
 from ui.handlers import MODES, UPLOAD_MODE, audio_handler, clearing_fluency, toggle_inputs
+
+# Browser-side fix so the recorder uses the microphone picked in its device dropdown (Gradio
+# 6.30 ignores that choice). Run it once per page with `demo.load(None, js=MIC_DEVICE_JS)`.
+MIC_DEVICE_JS = (Path(__file__).parent / "mic_device.js").read_text(encoding="utf-8")
 
 
 def render(

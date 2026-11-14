@@ -5,6 +5,7 @@ import pytest
 
 from tutor.core.errors import AudioValidationError, InferenceError
 from ui.app import build_demo
+from ui.features.audio_tools import MIC_DEVICE_JS
 from ui.handlers import (
     GENERIC_ERROR_MESSAGE,
     RECORD_MODE,
@@ -119,3 +120,13 @@ def test_build_demo_does_not_need_token(monkeypatch):
     assert isinstance(demo, gr.Blocks)
     audios = [b for b in demo.blocks.values() if isinstance(b, gr.Audio)]
     assert sorted(tuple(a.sources) for a in audios) == [("microphone",), ("upload",)]
+
+
+def test_mic_device_fix_is_loaded_on_page_load(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    demo = build_demo()
+
+    load_js = [f.js for f in demo.fns.values() if f.js and "mic-select" in f.js]
+    assert load_js == [MIC_DEVICE_JS]
+    assert MIC_DEVICE_JS.lstrip().startswith("() =>")
+    assert "deviceId: { exact: deviceId }" in MIC_DEVICE_JS
