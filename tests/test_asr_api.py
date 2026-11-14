@@ -1,29 +1,12 @@
 from dataclasses import replace
 
-import httpx2
 import pytest
 from huggingface_hub.errors import HfHubHTTPError
 
-from tests.conftest import FAKE_TOKEN
+from tests.conftest import FAKE_TOKEN, FakeSession
 from tutor.core.asr_api import FILLER_PROMPT, request_transcription
 
 ASR_URL = "https://asr.test/v1/audio/transcriptions"
-
-
-class FakeSession:
-    """Records the request and returns a canned response; never touches the network."""
-
-    def __init__(self, status: int = 200, payload: dict | None = None):
-        self.status = status
-        self.payload = payload if payload is not None else {"text": "Bonjour", "words": []}
-        self.calls: list[tuple[str, dict]] = []
-
-    def post(self, url, **kwargs):
-        # Read the file now: the handle is closed once request_transcription returns.
-        name, fh, mime = kwargs["files"]["file"]
-        kwargs["files"] = {"file": (name, fh.read(), mime)}
-        self.calls.append((url, kwargs))
-        return httpx2.Response(self.status, json=self.payload, request=httpx2.Request("POST", url))
 
 
 @pytest.fixture

@@ -1,10 +1,12 @@
 """French audio to English text: transcribe, then translate."""
 
 from pathlib import Path
+from typing import Any
 
 from huggingface_hub import InferenceClient
 
 from tutor.audio import transcriber
+from tutor.audio.validation import AudioSource
 from tutor.core.client import get_client
 from tutor.core.config import Settings, get_settings
 from tutor.core.errors import InferenceError
@@ -14,11 +16,16 @@ from tutor.core.inference import inference_errors
 def translate_audio(
     audio_path: str | Path,
     *,
+    source: AudioSource = "upload",
+    session: Any | None = None,
     client: InferenceClient | None = None,
     settings: Settings | None = None,
 ) -> str:
-    """Transcribe French audio (via `transcriber.transcribe`) and translate it to English."""
-    french = transcriber.transcribe(audio_path, client=client, settings=settings)
+    """Transcribe French audio (via `transcriber.transcribe`) and translate it to English.
+
+    `session` is used for the transcription call and `client` for the translation call.
+    """
+    french = transcriber.transcribe(audio_path, source=source, session=session, settings=settings)
     return translate_text(french, client=client, settings=settings)
 
 
