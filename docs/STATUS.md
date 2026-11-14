@@ -47,6 +47,13 @@ How v2 was designed is in [PLAN.md](PLAN.md).
 - **Reproduced:** in headless Chrome with fake devices, choosing "Fake Audio Input 2" opened "Fake Default Audio Input".
 - **Fix:** `ui/features/mic_device.js` runs once per page through `demo.load(js=...)`. After the user picks a device, it passes that choice to the browser's microphone request as an exact device ID. If that device has gone, it falls back to the default with a console warning. With the fix, Chrome opened "Fake Audio Input 2". It can be removed once Gradio itself uses the selection.
 - **Follow-up: mics that connect later.** Gradio lists devices only once, when the recorder appears, so a phone or headset that became available after that never showed up until a reload. The script now refreshes the dropdown when devices change: new mics are added, and removed ones are greyed out with the selection going back to the default. Checked in Chrome by revealing a hidden fake mic after page load, then picking it and recording from it.
+- **Follow-up: first recording silent on a phone mic.** The first recording after picking the phone came out silent; the second worked. Gradio starts recording the moment the device opens, but a Continuity iPhone mic (or Bluetooth earphones switching to their mic) sends digital silence for a while, and sometimes not at all on the first open. The script now does four things:
+  - It waits until the mic actually sends audio before recording starts.
+  - If nothing arrives within 3 s, it reopens the device once.
+  - It starts connecting a device as soon as you pick it.
+  - The Record button shows "connecting mic…" and ignores clicks during the wait.
+
+  Checked in Chrome with simulated mics for three cases: a phone that is slow to start (2.5 s), a phone that is silent on its first open, and a slow default mic. The first recording now has sound from its first few milliseconds; before, it lost 2.5 s or everything.
 - **Phone mic on a Mac:** a browser can only list mics that macOS offers. An iPhone appears as "iPhone Microphone" through Continuity only while it is nearby on the same Apple ID, with Wi-Fi and Bluetooth on and Continuity Camera enabled on the phone. It has to show under System Settings → Sound → Input before any browser can use it.
 - **Safety net:** a recording with no audible sound (peak below -60 dBFS) is now rejected before any model call, with a message to check the selected microphone. This stops Whisper inventing text from silence.
 

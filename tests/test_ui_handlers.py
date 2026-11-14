@@ -131,3 +131,4 @@ def test_mic_device_fix_is_loaded_on_page_load(monkeypatch):
     assert MIC_DEVICE_JS.lstrip().startswith("() =>")
     assert "deviceId: { exact: deviceId }" in MIC_DEVICE_JS
     assert '"devicechange"' in MIC_DEVICE_JS  # list refreshes when a mic connects later
+    assert "waitForSignal" in MIC_DEVICE_JS  # recording starts only once the mic sends audio
