@@ -5,7 +5,10 @@ import gradio as gr
 from ui.features import audio_tools
 
 TITLE = "French Tutor"
-DESCRIPTION = "Upload a French .mp3 to transcribe it to French text or translate it to English."
+DESCRIPTION = (
+    "Upload a French .mp3 or record yourself speaking French, then transcribe it to French "
+    "text (with pause and pace measures) or translate it to English."
+)
 
 
 def build_demo() -> gr.Blocks:

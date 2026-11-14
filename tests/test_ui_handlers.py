@@ -5,22 +5,83 @@ import pytest
 
 from tutor.core.errors import AudioValidationError, InferenceError
 from ui.app import build_demo
-from ui.handlers import GENERIC_ERROR_MESSAGE, audio_handler
+from ui.handlers import (
+    GENERIC_ERROR_MESSAGE,
+    RECORD_MODE,
+    UPLOAD_MODE,
+    audio_handler,
+    clearing_fluency,
+    pick_audio,
+    toggle_inputs,
+)
 
 
-@pytest.mark.parametrize("missing", [None, ""])
-def test_no_file_warns_and_skips_call(missing):
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        (UPLOAD_MODE, ("up.mp3", "upload")),
+        (RECORD_MODE, ("audio.wav", "recording")),
+    ],
+)
+def test_pick_audio_follows_mode(mode, expected):
+    assert pick_audio(mode, "up.mp3", "audio.wav") == expected
+
+
+def test_pick_audio_treats_blank_as_missing():
+    assert pick_audio(RECORD_MODE, "up.mp3", "") == (None, "recording")
+
+
+@pytest.mark.parametrize(
+    ("mode", "upload", "recording", "message"),
+    [
+        (UPLOAD_MODE, None, "audio.wav", "upload an .mp3"),
+        (UPLOAD_MODE, "", None, "upload an .mp3"),
+        (RECORD_MODE, "up.mp3", None, "record some audio"),
+    ],
+)
+def test_missing_input_warns_and_skips_call(mode, upload, recording, message):
     fn = MagicMock()
 
-    with pytest.warns(UserWarning, match="upload an .mp3"):
-        result = audio_handler(fn)(missing)
+    with pytest.warns(UserWarning, match=message):
+        result = audio_handler(fn)(mode, upload, recording)
 
     fn.assert_not_called()
     assert result == gr.skip()
 
 
-def test_success_returns_text():
-    assert audio_handler(lambda path: f"text for {path}")("a.mp3") == "text for a.mp3"
+def test_missing_input_skips_every_output():
+    with pytest.warns(UserWarning):
+        result = audio_handler(MagicMock(), n_outputs=2)(RECORD_MODE, None, None)
+
+    assert result == (gr.skip(), gr.skip())
+
+
+@pytest.mark.parametrize(
+    ("mode", "path", "source"),
+    [(UPLOAD_MODE, "up.mp3", "upload"), (RECORD_MODE, "audio.wav", "recording")],
+)
+def test_calls_fn_with_active_path_and_source(mode, path, source):
+    fn = MagicMock(return_value="texte")
+
+    assert audio_handler(fn)(mode, "up.mp3", "audio.wav") == "texte"
+    fn.assert_called_once_with(path, source=source)
+
+
+def test_transcribe_returns_both_outputs():
+    fn = MagicMock(return_value=("Euh… bonjour", "Words: 2"))
+
+    result = audio_handler(fn, n_outputs=2)(RECORD_MODE, None, "audio.wav")
+
+    assert result == ("Euh… bonjour", "Words: 2")
+
+
+def test_translate_clears_fluency():
+    translate = MagicMock(return_value="Hello", __name__="translate")
+
+    result = audio_handler(clearing_fluency(translate), n_outputs=2)(UPLOAD_MODE, "a.mp3", None)
+
+    assert result == ("Hello", "")
+    translate.assert_called_once_with("a.mp3", source="upload")
 
 
 @pytest.mark.parametrize("error", [AudioValidationError("Only .mp3"), InferenceError("Busy")])
@@ -28,7 +89,7 @@ def test_tutor_errors_shown_verbatim(error):
     fn = MagicMock(side_effect=error)
 
     with pytest.raises(gr.Error) as excinfo:
-        audio_handler(fn)("a.mp3")
+        audio_handler(fn)(UPLOAD_MODE, "a.mp3", None)
     assert excinfo.value.message == str(error)
 
 
@@ -36,10 +97,25 @@ def test_unexpected_error_shows_generic_message():
     fn = MagicMock(side_effect=KeyError("secret detail"), __name__="fn")
 
     with pytest.raises(gr.Error) as excinfo:
-        audio_handler(fn)("a.mp3")
+        audio_handler(fn)(UPLOAD_MODE, "a.mp3", None)
     assert excinfo.value.message == GENERIC_ERROR_MESSAGE
+
+
+@pytest.mark.parametrize(
+    ("mode", "upload_visible", "recording_visible"),
+    [(UPLOAD_MODE, True, False), (RECORD_MODE, False, True)],
+)
+def test_toggle_inputs_switches_visibility(mode, upload_visible, recording_visible):
+    upload, recording = toggle_inputs(mode)
+
+    assert upload["visible"] is upload_visible
+    assert recording["visible"] is recording_visible
 
 
 def test_build_demo_does_not_need_token(monkeypatch):
     monkeypatch.delenv("HF_TOKEN", raising=False)
-    assert isinstance(build_demo(), gr.Blocks)
+    demo = build_demo()
+
+    assert isinstance(demo, gr.Blocks)
+    audios = [b for b in demo.blocks.values() if isinstance(b, gr.Audio)]
+    assert sorted(tuple(a.sources) for a in audios) == [("microphone",), ("upload",)]
