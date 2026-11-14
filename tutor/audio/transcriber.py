@@ -55,7 +55,8 @@ def transcribe_detailed(
         logger.error("transcription returned a %s, expected a JSON object", type(payload).__name__)
         raise InferenceError("The transcription service returned an unexpected response.")
 
-    text = str(payload.get("text") or "").strip()
+    # Segments come back joined with extra spaces; collapse runs of whitespace to one.
+    text = " ".join(str(payload.get("text") or "").split())
     if not text:
         raise InferenceError("No speech was detected in the recording.")
 

@@ -14,6 +14,14 @@ def test_returns_stripped_text_using_configured_model(settings, mp3):
     assert session.calls[0][1]["data"]["model"] == "test/asr"
 
 
+def test_extra_whitespace_between_segments_is_collapsed(settings, mp3):
+    session = FakeSession(payload={"text": " Alors?  Je, je voudrais… hum.\n un café."})
+
+    text = transcribe(mp3, session=session, settings=settings)
+
+    assert text == "Alors? Je, je voudrais… hum. un café."
+
+
 def test_detailed_parses_words_and_duration(settings, wav):
     session = FakeSession(payload=HESITANT_RESPONSE)
 
