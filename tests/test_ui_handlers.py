@@ -130,3 +130,4 @@ def test_mic_device_fix_is_loaded_on_page_load(monkeypatch):
     assert load_js == [MIC_DEVICE_JS]
     assert MIC_DEVICE_JS.lstrip().startswith("() =>")
     assert "deviceId: { exact: deviceId }" in MIC_DEVICE_JS
+    assert '"devicechange"' in MIC_DEVICE_JS  # list refreshes when a mic connects later
