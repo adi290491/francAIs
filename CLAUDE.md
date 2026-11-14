@@ -64,7 +64,8 @@ Do not add other dependencies without asking first.
 │   ├── app.py              # build_demo(): composes feature views into one Blocks app
 │   ├── handlers.py         # Adapts tutor functions to Gradio (TutorError -> gr.Error, etc.)
 │   └── features/
-│       └── audio_tools.py  # render(): mode toggle, upload + mic, buttons, Output + Fluency
+│       ├── audio_tools.py  # render(): mode toggle, upload + mic, buttons, Output + Fluency
+│       └── mic_device.js   # Browser fix: make the recorder use the mic picked in its dropdown
 ├── tests/
 │   ├── conftest.py         # settings/client fixtures, FakeSession for the ASR HTTP call
 │   ├── sample_responses.py # a DeepInfra-shaped hesitant-French response
@@ -129,6 +130,8 @@ Important:
 - Mode toggle: `gr.Radio(["Upload", "Record"], value="Upload", label="Input")`. Changing it toggles `visible` on the two audio inputs; both keep their values.
 - `gr.Audio(sources=["upload"], type="filepath", label="Upload French audio (.mp3)")` — gives the user playback of their file.
 - `gr.Audio(sources=["microphone"], type="filepath", label="Record French audio", visible=False)` — the browser recorder offers every available microphone (built-in, headset, phone browser over the Space's HTTPS).
+  - **Gradio 6.30 bug, worked around:** the recorder's "Select input device" dropdown is never read; it always records from the browser default (`getUserMedia({audio: true})`), so picking e.g. a phone records the laptop mic. `ui/features/mic_device.js` (run once per page via `demo.load(None, js=MIC_DEVICE_JS)` in `ui/app.py`) makes audio `getUserMedia` calls use the picked device as `deviceId: {exact}`, and only once the user has changed the dropdown. Re-check this when upgrading Gradio and delete it once Gradio honours the selection.
+  - Recordings with no audible sample (peak below -60 dBFS: muted or wrong mic) are rejected in `validation.py` before any model call, because Whisper invents text for silence.
 - Two buttons side by side: **Transcribe (French)** and **Translate (English)** (API names `/transcribe`, `/translate`). Both act on the active mode's audio.
 - `gr.Textbox(lines=12, label="Output", interactive=False, buttons=["copy"])` (Gradio 6 replaced `show_copy_button` with `buttons`).
 - `gr.Textbox(lines=8, label="Fluency (pauses & pace)", interactive=False)` — filled by Transcribe ("Fluency measures unavailable for this recording." when timings are missing) and cleared by Translate.
