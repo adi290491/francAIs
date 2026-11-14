@@ -2,6 +2,7 @@ import pytest
 
 from tutor.core.config import (
     DEFAULT_ASR_MODEL,
+    DEFAULT_ASR_URL,
     DEFAULT_MAX_UPLOAD_MB,
     DEFAULT_TRANSLATION_MODEL,
     load_settings,
@@ -22,6 +23,8 @@ def test_blank_token_is_treated_as_missing():
 def test_defaults_applied():
     settings = load_settings({"HF_TOKEN": "hf_test"})
     assert settings.asr_model == DEFAULT_ASR_MODEL
+    assert settings.asr_url == DEFAULT_ASR_URL
+    assert DEFAULT_ASR_URL.startswith("https://router.huggingface.co/deepinfra/")
     assert settings.translation_model == DEFAULT_TRANSLATION_MODEL
     assert settings.max_upload_mb == DEFAULT_MAX_UPLOAD_MB
     assert settings.max_upload_bytes == 25 * 1024 * 1024
@@ -32,12 +35,14 @@ def test_env_overrides():
         {
             "HF_TOKEN": "hf_test",
             "ASR_MODEL": "org/asr",
+            "ASR_URL": "https://asr.example/v1/audio/transcriptions",
             "TRANSLATION_MODEL": "org/mt",
             "MAX_UPLOAD_MB": "10",
             "INFERENCE_TIMEOUT_S": "30",
         }
     )
     assert settings.asr_model == "org/asr"
+    assert settings.asr_url == "https://asr.example/v1/audio/transcriptions"
     assert settings.translation_model == "org/mt"
     assert settings.max_upload_mb == 10
     assert settings.inference_timeout_s == 30

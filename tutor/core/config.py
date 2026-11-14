@@ -10,6 +10,9 @@ from dotenv import load_dotenv
 from tutor.core.errors import ConfigError
 
 DEFAULT_ASR_MODEL = "openai/whisper-large-v3"
+# DeepInfra's OpenAI-compatible transcription endpoint, reached through the HF router. Called
+# directly (not via InferenceClient) because it is the only route that returns word timings.
+DEFAULT_ASR_URL = "https://router.huggingface.co/deepinfra/v1/openai/audio/transcriptions"
 DEFAULT_TRANSLATION_MODEL = "Helsinki-NLP/opus-mt-fr-en"
 DEFAULT_MAX_UPLOAD_MB = 25.0
 DEFAULT_INFERENCE_TIMEOUT_S = 120.0
@@ -27,6 +30,7 @@ class Settings:
 
     hf_token: str = field(repr=False)
     asr_model: str = DEFAULT_ASR_MODEL
+    asr_url: str = DEFAULT_ASR_URL
     translation_model: str = DEFAULT_TRANSLATION_MODEL
     max_upload_mb: float = DEFAULT_MAX_UPLOAD_MB
     inference_timeout_s: float = DEFAULT_INFERENCE_TIMEOUT_S
@@ -52,6 +56,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     return Settings(
         hf_token=token,
         asr_model=env.get("ASR_MODEL", "").strip() or DEFAULT_ASR_MODEL,
+        asr_url=env.get("ASR_URL", "").strip() or DEFAULT_ASR_URL,
         translation_model=env.get("TRANSLATION_MODEL", "").strip() or DEFAULT_TRANSLATION_MODEL,
         max_upload_mb=_positive_float(env, "MAX_UPLOAD_MB", DEFAULT_MAX_UPLOAD_MB),
         inference_timeout_s=_positive_float(
