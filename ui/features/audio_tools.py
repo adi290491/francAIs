@@ -37,7 +37,7 @@ def render(
     output = gr.Textbox(lines=12, label="Output", interactive=False, buttons=["copy"])
     fluency = gr.Textbox(lines=8, label="Fluency (pauses & pace)", interactive=False)
 
-    mode.change(toggle_inputs, inputs=mode, outputs=[upload, recording], api_name=False)
+    mode.change(toggle_inputs, inputs=mode, outputs=[upload, recording], api_visibility="private")
     inputs = [mode, upload, recording]
     transcribe_btn.click(
         audio_handler(transcribe_fn, n_outputs=2),
