@@ -11,15 +11,17 @@ from tutor.core.errors import AudioValidationError
 
 logger = logging.getLogger(__name__)
 
-AudioSource = Literal["upload", "recording"]
+AudioSource = Literal["upload", "recording", "file"]
 
 # Uploads keep the v1 rule. Gradio's microphone recorder always hands back `audio.wav`.
+# "file" is audio sent by a program (the MCP tools), which may be either kind.
 ALLOWED_EXTENSIONS: dict[str, frozenset[str]] = {
     "upload": frozenset({".mp3"}),
     "recording": frozenset({".wav"}),
+    "file": frozenset({".mp3", ".wav"}),
 }
 
-_NOUN = {"upload": "uploaded file", "recording": "recording"}
+_NOUN = {"upload": "uploaded file", "recording": "recording", "file": "audio file"}
 
 # A recording whose loudest sample is below -60 dBFS has no speech in it: the microphone was
 # muted, disconnected, or not the one being spoken into. Whisper invents text for silence
@@ -29,6 +31,7 @@ SILENT_RECORDING_MESSAGE = (
     "No sound was picked up in the recording. Check that the microphone selected in the "
     "recorder is the one you are speaking into and that it isn't muted, then record again."
 )
+SILENT_FILE_MESSAGE = "The audio file is silent. Please send a .wav or .mp3 with speech in it."
 
 
 def validate_audio(path: str | Path, *, max_bytes: int, source: AudioSource = "upload") -> Path:
@@ -45,10 +48,12 @@ def validate_audio(path: str | Path, *, max_bytes: int, source: AudioSource = "u
         shown = audio.suffix or "no extension"
         if source == "upload":
             raise AudioValidationError(f"Only .mp3 files are supported (got {shown}).")
+        if source == "file":
+            raise AudioValidationError(f"Only .mp3 or .wav files are supported (got {shown}).")
         raise AudioValidationError(f"The recording must be a .wav file (got {shown}).")
 
     if not audio.is_file():
-        again = "upload it" if source == "upload" else "record it"
+        again = {"upload": "upload it", "recording": "record it", "file": "send it"}[source]
         raise AudioValidationError(f"The {noun} could not be found. Please {again} again.")
 
     size = audio.stat().st_size
@@ -57,6 +62,8 @@ def validate_audio(path: str | Path, *, max_bytes: int, source: AudioSource = "u
             raise AudioValidationError(
                 "The uploaded file is empty. Please choose a different .mp3."
             )
+        if source == "file":
+            raise AudioValidationError("The audio file is empty. Please send a different file.")
         raise AudioValidationError("The recording is empty. Please record again.")
     if size > max_bytes:
         raise AudioValidationError(
@@ -66,6 +73,8 @@ def validate_audio(path: str | Path, *, max_bytes: int, source: AudioSource = "u
 
     if source == "recording" and _is_silent(audio):
         raise AudioValidationError(SILENT_RECORDING_MESSAGE)
+    if source == "file" and audio.suffix.lower() == ".wav" and _is_silent(audio):
+        raise AudioValidationError(SILENT_FILE_MESSAGE)
 
     return audio
 

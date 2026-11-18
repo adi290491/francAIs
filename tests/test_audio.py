@@ -135,3 +135,39 @@ def test_unreadable_or_non_16_bit_wav_is_left_to_the_provider(tmp_path):
 
     assert validate_audio(stub, max_bytes=MAX_BYTES, source="recording") == stub
     assert validate_audio(eight_bit, max_bytes=MAX_BYTES, source="recording") == eight_bit
+
+
+# --- v2_1: audio sent by a program (the MCP tools) may be .mp3 or .wav ---
+
+
+@pytest.mark.parametrize("name", ["clip.mp3", "CLIP.MP3", "audio.wav", "AUDIO.WAV"])
+def test_file_source_accepts_mp3_and_wav(tmp_path, name):
+    path = _stub(tmp_path, name, 100)
+    assert validate_audio(path, max_bytes=MAX_BYTES, source="file") == path
+
+
+@pytest.mark.parametrize("name", ["clip.webm", "clip.ogg", "clip.mp3.txt", "clip"])
+def test_file_source_rejects_other_types(tmp_path, name):
+    path = _stub(tmp_path, name, 100)
+    with pytest.raises(AudioValidationError, match=r"Only \.mp3 or \.wav"):
+        validate_audio(path, max_bytes=MAX_BYTES, source="file")
+
+
+def test_file_source_rejects_empty_missing_and_oversize(tmp_path):
+    with pytest.raises(AudioValidationError, match="audio file is empty"):
+        validate_audio(_stub(tmp_path, "e.mp3", 0), max_bytes=MAX_BYTES, source="file")
+    with pytest.raises(AudioValidationError, match="send it again"):
+        validate_audio(tmp_path / "gone.wav", max_bytes=MAX_BYTES, source="file")
+    with pytest.raises(AudioValidationError, match="audio file is .* over the"):
+        validate_audio(_stub(tmp_path, "b.wav", MAX_BYTES + 1), max_bytes=MAX_BYTES, source="file")
+
+
+def test_file_source_rejects_silent_wav(tmp_path):
+    path = _wav(tmp_path, [0] * 16000)
+    with pytest.raises(AudioValidationError, match="audio file is silent"):
+        validate_audio(path, max_bytes=10**7, source="file")
+
+
+def test_file_source_accepts_audible_wav(tmp_path):
+    path = _wav(tmp_path, [0] * 100 + [3000, -3000] * 100)
+    assert validate_audio(path, max_bytes=10**7, source="file") == path
