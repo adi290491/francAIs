@@ -28,6 +28,12 @@ Later versions will add tutoring features (vocabulary, quizzes, conversation pra
 6. **Word-level timestamp** - Maintain any gaps between words allowing pause lengths and words per minute, real fluency measures.
 7. **temperature** - set to zero (0) for consistent, literal output.
 
+## v2_1 scope (build exactly this)
+1. **Transcription as MCP tool** - The transcription service should be accessible as an MCP tool as well if called from a host such as local host, claude etc.
+2. **Translation as MCP tool** - The translation service should be accessible as an MCP tool as well if called from a host such as local host, claude etc
+3. **Current features** - Keep the current transcription and translation feature function as it exists now while enhancing with points 1 and 2.
+4. **MCP tool url** - After deploying the features to huggingface space, share the url or/and config values to add to the host in order to connect.
+
 Out of scope for v1: user accounts, saving history, any database, multiple languages other than French→English, streaming output.
 
 ## Tech stack
@@ -65,6 +71,7 @@ Do not add other dependencies without asking first.
 │   ├── handlers.py         # Adapts tutor functions to Gradio (TutorError -> gr.Error, etc.)
 │   └── features/
 │       ├── audio_tools.py  # render(): mode toggle, upload + mic, buttons, Output + Fluency
+│       ├── mcp_tools.py    # render(): API-only MCP tools transcribe_french / translate_to_english
 │       └── mic_device.js   # Browser fix: make the recorder use the mic picked in its dropdown
 ├── tests/
 │   ├── conftest.py         # settings/client fixtures, FakeSession for the ASR HTTP call
@@ -75,10 +82,11 @@ Do not add other dependencies without asking first.
 │   ├── test_transcriber.py
 │   ├── test_fluency.py
 │   ├── test_translator.py
+│   ├── test_mcp_tools.py
 │   └── test_ui_handlers.py
 ├── docs/
 │   ├── PLAN.md             # v2 implementation plan (incl. the step 0 provider check)
-│   └── STATUS.md           # status of every v1/v2 scope item
+│   └── STATUS.md           # status of every v1/v2/v2_1 scope item
 ├── .github/workflows/
 │   └── deploy-to-hf.yml    # Syncs master to the HF Space
 ├── pyproject.toml
@@ -136,7 +144,14 @@ Important:
 - `gr.Textbox(lines=12, label="Output", interactive=False, buttons=["copy"])` (Gradio 6 replaced `show_copy_button` with `buttons`).
 - `gr.Textbox(lines=8, label="Fluency (pauses & pace)", interactive=False)` — filled by Transcribe ("Fluency measures unavailable for this recording." when timings are missing) and cleared by Translate.
 - While a request runs, the buttons should show progress (Gradio's default queue/progress is fine).
-- `app.py` ends with `demo.launch()` and must not hardcode a host or port, so it works both locally and on Spaces.
+- `app.py` ends with `demo.launch(mcp_server=True)` and must not hardcode a host or port, so it works both locally and on Spaces.
+
+## MCP tools (v2_1)
+
+- `mcp_server=True` makes Gradio serve every **public** endpoint as an MCP tool at `/gradio_api/mcp/`, named after the function and described by its docstring (one line per `Args:` entry).
+- The tools are `gr.api` endpoints in `ui/features/mcp_tools.py`: `transcribe_french(audio)` (JSON string with `french_text`, `fluency`) and `translate_to_english(audio)`. They validate with source `"file"` (`.mp3` or `.wav`) and map errors via `ui.handlers.tool_handler`.
+- The button endpoints `/transcribe` and `/translate` are `api_visibility="undocumented"`: callable by `gradio_client`, hidden from the API page and the MCP tool list. A new public endpoint becomes an MCP tool, so make internal ones `private` or `undocumented`.
+- Audio reaches the tools only as an http(s) link (downloaded by Gradio with an SSRF guard and no auth) or a `data:` URI. The Space is private, so hosts send `Authorization: Bearer <HF read token>`. See the README for host setup.
 
 ## Hugging Face Space deployment
 

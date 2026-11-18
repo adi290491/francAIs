@@ -1,7 +1,7 @@
 # Status
 
-Last updated: 2026-11-13. Covers every item in the v1 and v2 scope in [CLAUDE.md](../CLAUDE.md).
-How v2 was designed is in [PLAN.md](PLAN.md).
+Last updated: 2026-11-17. Covers every item in the v1, v2 and v2_1 scope in
+[CLAUDE.md](../CLAUDE.md). How v2 was designed is in [PLAN.md](PLAN.md).
 
 **Legend:** ✅ done and verified · 🟡 done, still needs a manual check · ❌ not done
 
@@ -9,11 +9,12 @@ How v2 was designed is in [PLAN.md](PLAN.md).
 
 | Check | Result |
 |---|---|
-| `uv run pytest` | 103 passed (no network, no `HF_TOKEN` needed) |
+| `uv run pytest` | 131 passed (no network, no `HF_TOKEN` needed) |
 | `uv run ruff check .` / `ruff format` | clean |
-| Dependencies | unchanged; `uv export` matches `requirements.txt`, so no regeneration was needed |
+| Dependencies | v2_1: `gradio` → `gradio[mcp]` (same 6.30.0). `requirements.txt` regenerated; the Space's package set still resolves on Python 3.10 |
 | Real API calls (local app, driven with `gradio_client`) | transcribe recording ✅ · translate recording ✅ · transcribe `.mp3` upload ✅ |
-| Deployed to the Space | v1 only. The v2 commits are on local `master` and not pushed yet |
+| Real API calls (local app, through an MCP client) | `transcribe_french` ✅ · `translate_to_english` ✅ · silent `.wav` and `.txt` rejected with friendly messages ✅ |
+| Deployed to the Space | v2 is live (checked 2026-11-17: the endpoints return Output + Fluency). The v2_1 commits are on local `master`, waiting for you to push |
 
 ## v1 scope
 
@@ -37,6 +38,30 @@ How v2 was designed is in [PLAN.md](PLAN.md).
 | 5 | Keep fillers | 🟡 | The filler prompt `Euh, alors… je, je voudrais… hum` and temperature 0 are sent on every call, and the transcript text is returned as is (only extra spaces are collapsed). The step 0 check showed the prompt is needed: without it, an « euh » was dropped. **Limit:** with today's synthetic voice (macOS `say`), « je, je » and « hum » were kept, but the opening « Euh » was dropped and the closing « euh » came back as « hum ». TTS fillers don't sound like real hesitation, so this still needs checking with real hesitant speech. The prompt is the strongest lever Whisper offers. |
 | 6 | Word-level timestamps → pauses, words per minute | ✅ | `timestamp_granularities[]=word` gives real gaps between words. `fluency.py` counts gaps of 0.25 s or more as pauses and reports words per minute over the speaking time. Split fragments (`" s"` + `"'il"`) are joined before counting. In the real call, the 0.9 / 1.2 / 0.7 s inserted silences were detected as 3 pauses (1.06 / 1.57 / 0.82 s; the TTS adds its own pauses at punctuation). If a response has no timings, the panel says "Fluency measures unavailable for this recording." |
 | 7 | Temperature 0 | ✅ | `temperature=0` is sent on every transcription request (unit tested). |
+
+## v2_1 scope
+
+| # | Item | Status | Notes |
+|---|---|---|---|
+| 1 | Transcription as an MCP tool | 🟡 | `transcribe_french(audio)` returns JSON with `french_text` and `fluency`. It runs `transcribe_with_fluency`, the same function as the button. A real call over MCP on the local app returned « Euh, alors, je, je voudrais un café, s'il vous plaît. et un croissant. » and found the inserted 0.9 s pause (1.00 s). **Not yet checked:** on the Space, after the push. |
+| 2 | Translation as an MCP tool | 🟡 | `translate_to_english(audio)` runs `translate_audio`. A real local call returned "Uh, so, I, uh, I'd like a coffee, please, and a croissant." **Not yet checked:** on the Space. |
+| 3 | Current features unchanged | ✅ | The UI isn't touched. `/transcribe` and `/translate` are now `api_visibility="undocumented"`, so they're no longer on the API page or in the MCP tool list, but `gradio_client` still calls them (checked with a real `/translate` call). Uploads keep the `.mp3` rule and recordings the `.wav` rule; MCP audio uses a new `"file"` source that allows either, and `.wav` files get the silence check. |
+| 4 | MCP URL and config | ✅ (docs) | URL `https://adi290491-french-tutor.hf.space/gradio_api/mcp/`. Steps for claude.ai, Claude Code and other hosts, with the private-Space token header, are in the [README](../README.md#use-it-as-mcp-tools-claude-and-other-hosts). |
+
+How it works:
+
+- `ui/features/mcp_tools.py` registers the two tools with `gr.api` (no components).
+- `app.py` launches with `mcp_server=True`.
+- Gradio turns each public endpoint into a tool, using the function's name and docstring.
+- Errors go through `ui.handlers.tool_handler`, which maps them like the buttons do: a user-safe message, never a stack trace.
+
+Limits found while building it:
+
+- **Audio must be a link.** Gradio's MCP server accepts a file only as an http(s) URL, which it downloads, or a `data:` URI. Claude can't pass a chat attachment or a local file. A base64 clip would also cost about a token per character in tool arguments.
+- **The Space must be able to reach the link without a token.** Gradio fetches URLs with an SSRF guard (protection against server-side request forgery) and sends no auth. So on a private Space, the link must point somewhere public, not at the Space itself. For the same reason, Gradio's `upload-mcp` helper can't be used with a private Space.
+- **Local testing uses data URIs.** The SSRF guard also refuses `127.0.0.1` links, so the local MCP checks sent the clip as a `data:` URI.
+- **Gradio adds its own hint to each tool description.** It mentions an `upload_file_to_gradio` tool that this setup doesn't offer. Hosts ignore it when that tool is absent.
+- **claude.ai needs a beta feature for private Spaces.** Sending the `Authorization` header from a claude.ai connector uses "Request headers", a beta limited to some organizations. Without it, claude.ai can't reach a private Space. Claude Code always can.
 
 ## Bugs fixed
 
@@ -69,6 +94,14 @@ Transcription no longer uses `InferenceClient`. It sends a direct `POST` to Deep
    - press Transcribe and check that Output and Fluency both fill
    - press Translate and check for English
 2. **Real hesitant speech:** record yourself with real « euh » / « hum » and check they appear in the transcript (v2 #5).
-3. **Push** `master` to deploy v2. No new secrets are needed. The Space's existing `HF_TOKEN` must be allowed to call Inference Providers, because DeepInfra usage is billed to the same HF credits.
+3. ~~Push `master` to deploy v2~~. Done: v2 is live on the Space.
 4. **On the Space:** record from a phone browser to confirm mobile microphones work over HTTPS.
 5. **Phone as microphone:** pick your phone in the device list (for example an iPhone through Continuity, or a Bluetooth headset), record, and play the clip back. It should be your voice from the phone.
+
+### v2_1 (MCP)
+
+6. **Make the Space private.** It is currently **public** (checked 2026-11-17: pages load without a token). Go to Space → Settings → Change visibility → Private. Do this before you push, so the MCP endpoint is never public. If the Space then fails to start, check whether your plan allows private ZeroGPU Spaces.
+7. **Push** `master` to deploy v2_1. No new secrets are needed.
+8. **Create a Read token** for Claude at <https://huggingface.co/settings/tokens>, separate from the Space's and GitHub's tokens.
+9. **Check the endpoint** with the `curl` in the README. It should list the two tools.
+10. **Add the connector** in claude.ai (Customize → Connectors → Add custom connector, header `authorization: Bearer hf_…`), or in Claude Code with `claude mcp add`. Then call `transcribe_french` with a direct public link to a French `.mp3`.
