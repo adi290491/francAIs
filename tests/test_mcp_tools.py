@@ -1,5 +1,6 @@
 """v2_1: transcription and translation exposed as MCP tools."""
 
+import json
 from unittest.mock import MagicMock
 
 import gradio as gr
@@ -67,8 +68,29 @@ def test_transcribe_tool_returns_text_and_fluency():
 
     result = tools["transcribe_french"](FileData(path="/tmp/clip.mp3"))
 
-    assert result == {"french_text": "Euh… bonjour", "fluency": "Words: 2"}
+    assert json.loads(result) == {"french_text": "Euh… bonjour", "fluency": "Words: 2"}
+    assert "Euh…" in result  # readable JSON, not \u escapes
     transcribe.assert_called_once_with("/tmp/clip.mp3", source="file")
+
+
+def test_tools_accept_the_dict_gradio_passes():
+    """What `gr.api` really hands the function: the cached file as a plain dict."""
+    transcribe = MagicMock(return_value=("Bonjour", "Words: 1"))
+    translate = MagicMock(return_value="Hello")
+    tools = _tools(transcribe_fn=transcribe, translate_fn=translate)
+    audio = {"path": "/tmp/gradio/abc/fr.wav", "url": None, "meta": {"_type": "gradio.FileData"}}
+
+    assert json.loads(tools["transcribe_french"](audio))["french_text"] == "Bonjour"
+    assert tools["translate_to_english"](audio) == "Hello"
+    transcribe.assert_called_once_with("/tmp/gradio/abc/fr.wav", source="file")
+    translate.assert_called_once_with("/tmp/gradio/abc/fr.wav", source="file")
+
+
+def test_tool_without_file_path_is_an_error():
+    tools = _tools()
+
+    with pytest.raises(gr.Error, match="Please provide"):
+        tools["transcribe_french"]({"path": None})
 
 
 def test_translate_tool_returns_english():

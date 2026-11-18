@@ -5,6 +5,7 @@ tool, named after the function and described by its docstring. These two endpoin
 components; they take one audio file and reuse the same `tutor` functions as the buttons.
 """
 
+import json
 from collections.abc import Callable
 
 import gradio as gr
@@ -27,25 +28,26 @@ def render(
     run_transcribe = tool_handler(transcribe_fn)
     run_translate = tool_handler(translate_fn)
 
-    def transcribe_french(audio: FileData) -> dict[str, str]:
+    def transcribe_french(audio: FileData) -> str:
         """Transcribe French speech to French text, keeping fillers (« euh », « hum »),
         and measure fluency (pauses and words per minute).
 
         Args:
-            audio: French speech as an .mp3 or .wav file (25 MB max by default), given as a public http(s) URL or a URL returned by an upload tool.
+            audio: French speech as an .mp3 or .wav file (25 MB max by default), given as a direct, publicly reachable http(s) link to the audio file.
 
         Returns:
-            A JSON object: french_text (the verbatim French transcript) and fluency
+            JSON with french_text (the verbatim French transcript) and fluency
             (words per minute and the pauses of 0.25 s or more between words).
         """  # noqa: E501 (Gradio reads an argument's description from one line)
         text, fluency = run_transcribe(_path(audio))
-        return {"french_text": text, "fluency": fluency}
+        # JSON text: Gradio's MCP server would send a dict as its Python repr (`str(dict)`).
+        return json.dumps({"french_text": text, "fluency": fluency}, ensure_ascii=False)
 
     def translate_to_english(audio: FileData) -> str:
         """Translate French speech to English text (transcribes it to French first).
 
         Args:
-            audio: French speech as an .mp3 or .wav file (25 MB max by default), given as a public http(s) URL or a URL returned by an upload tool.
+            audio: French speech as an .mp3 or .wav file (25 MB max by default), given as a direct, publicly reachable http(s) link to the audio file.
 
         Returns:
             The English translation.
@@ -56,8 +58,14 @@ def render(
     gr.api(translate_to_english, api_name="translate_to_english")
 
 
-def _path(audio: FileData | str | None) -> str | None:
-    """The local path of the file Gradio downloaded for the call."""
+def _path(audio: FileData | dict | str | None) -> str | None:
+    """The local path of the file Gradio downloaded for the call.
+
+    `gr.api` passes the cached file as a plain dict (`{"path": ..., "url": ...}`), not a
+    `FileData`; both, and a bare path, are accepted.
+    """
     if isinstance(audio, FileData):
         return audio.path
+    if isinstance(audio, dict):
+        return audio.get("path")
     return audio
