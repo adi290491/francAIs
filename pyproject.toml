@@ -5,7 +5,7 @@ description = "Personal French tutoring assistant"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "gradio==6.30.0",
+    "gradio[mcp]==6.30.0",
     "huggingface-hub>=2.2.0",
     "python-dotenv>=1.2.4",
 ]
