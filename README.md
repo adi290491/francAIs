@@ -36,7 +36,9 @@ The app also runs an MCP server (`demo.launch(mcp_server=True)`) with two tools:
 | `translate_to_english` | `audio`: link to a French `.mp3` or `.wav` | the English translation |
 
 They run the same code as the buttons, with the same limits (25 MB by default) and the same
-friendly error messages.
+friendly error messages. On the Space, Gradio prefixes each tool with the Space name, so hosts see
+**`french_tutor_transcribe_french`** and **`french_tutor_translate_to_english`**. Locally the
+names have no prefix.
 
 | | MCP server URL |
 |---|---|
@@ -55,6 +57,9 @@ friendly error messages.
   or a GitHub raw link. Claude can't send the server a file you attached in the chat or one on
   your computer, and share pages (a Google Drive "view" link) are not the file itself.
   Anyone with that link can play the clip, so only link to audio you're fine making public.
+  Some sites refuse automated downloads. Wikimedia, for example, answers 403 to the server's
+  default User-Agent, and the tool then reports only a generic error. Hugging Face dataset links
+  work (checked on the Space).
 - Gradio's `upload-mcp` helper (for local files) doesn't send a token, so it can't upload to a
   private Space.
 
@@ -75,7 +80,7 @@ That is a beta that is "available to a limited set of organizations"
    - value: `Bearer hf_…`, i.e. the word `Bearer`, a space, then your Read token. Claude sends
      the value exactly as typed.
 5. Click **Add**. In a chat, enable the connector from the tools menu and ask, for example:
-   *"Use transcribe_french on https://…/clip.mp3 and comment on my pauses."*
+   *"Use the French Tutor transcribe tool on https://…/clip.mp3 and comment on my pauses."*
 
 - **No "Request headers" section?** Your account doesn't have the beta, and claude.ai can't
   reach a private Space. Use Claude Code (below) instead, or make the Space public, which lets
@@ -121,8 +126,8 @@ curl -s https://adi290491-french-tutor.hf.space/gradio_api/mcp/ \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-The reply lists `transcribe_french` and `translate_to_english`. An error page (401/404) instead
-means the token is missing or can't read the Space.
+The reply lists `french_tutor_transcribe_french` and `french_tutor_translate_to_english`. A
+`404` instead means the token is missing or can't read the Space.
 
 The button endpoints `/transcribe` and `/translate` are still callable with `gradio_client`, but
 they are left out of the API page and the MCP tool list (`api_visibility="undocumented"`),

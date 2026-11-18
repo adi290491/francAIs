@@ -149,7 +149,7 @@ Important:
 ## MCP tools (v2_1)
 
 - `mcp_server=True` makes Gradio serve every **public** endpoint as an MCP tool at `/gradio_api/mcp/`, named after the function and described by its docstring (one line per `Args:` entry).
-- The tools are `gr.api` endpoints in `ui/features/mcp_tools.py`: `transcribe_french(audio)` (JSON string with `french_text`, `fluency`) and `translate_to_english(audio)`. They validate with source `"file"` (`.mp3` or `.wav`) and map errors via `ui.handlers.tool_handler`.
+- The tools are `gr.api` endpoints in `ui/features/mcp_tools.py`: `transcribe_french(audio)` (JSON string with `french_text`, `fluency`) and `translate_to_english(audio)`. On the Space, Gradio prefixes tool names with the Space name (`french_tutor_transcribe_french`, …). They validate with source `"file"` (`.mp3` or `.wav`) and map errors via `ui.handlers.tool_handler`.
 - The button endpoints `/transcribe` and `/translate` are `api_visibility="undocumented"`: callable by `gradio_client`, hidden from the API page and the MCP tool list. A new public endpoint becomes an MCP tool, so make internal ones `private` or `undocumented`.
 - Audio reaches the tools only as an http(s) link (downloaded by Gradio with an SSRF guard and no auth) or a `data:` URI. The Space is private, so hosts send `Authorization: Bearer <HF read token>`. See the README for host setup.
 

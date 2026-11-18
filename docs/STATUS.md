@@ -14,7 +14,8 @@ Last updated: 2026-11-17. Covers every item in the v1, v2 and v2_1 scope in
 | Dependencies | v2_1: `gradio` → `gradio[mcp]` (same 6.30.0). `requirements.txt` regenerated; the Space's package set still resolves on Python 3.10 |
 | Real API calls (local app, driven with `gradio_client`) | transcribe recording ✅ · translate recording ✅ · transcribe `.mp3` upload ✅ |
 | Real API calls (local app, through an MCP client) | `transcribe_french` ✅ · `translate_to_english` ✅ · silent `.wav` and `.txt` rejected with friendly messages ✅ |
-| Deployed to the Space | v2 is live (checked 2026-11-17: the endpoints return Output + Fluency). The v2_1 commits are on local `master`, waiting for you to push |
+| Deployed to the Space | v2_1 is live: the Space runs `566a466`, is private and RUNNING on ZeroGPU (checked 2026-11-17 with a read token) |
+| Real API calls (live Space, through an MCP client with a read token) | both tools with inline audio ✅ · both tools with a public HF dataset link ✅ · silent `.wav` / `.txt` rejected ✅ · no token → 404 ✅ |
 
 ## v1 scope
 
@@ -43,10 +44,10 @@ Last updated: 2026-11-17. Covers every item in the v1, v2 and v2_1 scope in
 
 | # | Item | Status | Notes |
 |---|---|---|---|
-| 1 | Transcription as an MCP tool | 🟡 | `transcribe_french(audio)` returns JSON with `french_text` and `fluency`. It runs `transcribe_with_fluency`, the same function as the button. A real call over MCP on the local app returned « Euh, alors, je, je voudrais un café, s'il vous plaît. et un croissant. » and found the inserted 0.9 s pause (1.00 s). **Not yet checked:** on the Space, after the push. |
-| 2 | Translation as an MCP tool | 🟡 | `translate_to_english(audio)` runs `translate_audio`. A real local call returned "Uh, so, I, uh, I'd like a coffee, please, and a croissant." **Not yet checked:** on the Space. |
+| 1 | Transcription as an MCP tool | ✅ | `transcribe_french(audio)` returns JSON with `french_text` and `fluency`. It runs `transcribe_with_fluency`, the same function as the button. On the Space it's listed as `french_tutor_transcribe_french`, because Gradio adds the Space name as a prefix. Live calls: a hesitant clip returned « Euh, alors, je, je voudrais un café, s'il vous plaît. et un croissant. » with its inserted 0.9 s pause (1.00 s). A public HF dataset link returned « Benoît Hamon, Monsieur le Ministre, ce texte, c'est votre projet. » |
+| 2 | Translation as an MCP tool | ✅ | `translate_to_english(audio)` runs `translate_audio`, listed as `french_tutor_translate_to_english` on the Space. Live calls returned "Uh, so, I, uh, I'd like a coffee, please, and a croissant." and, from the dataset link, "Benoît Hamon, Minister, this text is your project." |
 | 3 | Current features unchanged | ✅ | The UI isn't touched. `/transcribe` and `/translate` are now `api_visibility="undocumented"`, so they're no longer on the API page or in the MCP tool list, but `gradio_client` still calls them (checked with a real `/translate` call). Uploads keep the `.mp3` rule and recordings the `.wav` rule; MCP audio uses a new `"file"` source that allows either, and `.wav` files get the silence check. |
-| 4 | MCP URL and config | ✅ (docs) | URL `https://adi290491-french-tutor.hf.space/gradio_api/mcp/`. Steps for claude.ai, Claude Code and other hosts, with the private-Space token header, are in the [README](../README.md#use-it-as-mcp-tools-claude-and-other-hosts). |
+| 4 | MCP URL and config | ✅ | URL `https://adi290491-french-tutor.hf.space/gradio_api/mcp/`. Steps for claude.ai, Claude Code and other hosts, with the private-Space token header, are in the [README](../README.md#use-it-as-mcp-tools-claude-and-other-hosts). |
 
 How it works:
 
@@ -61,6 +62,7 @@ Limits found while building it:
 - **The Space must be able to reach the link without a token.** Gradio fetches URLs with an SSRF guard (protection against server-side request forgery) and sends no auth. So on a private Space, the link must point somewhere public, not at the Space itself. For the same reason, Gradio's `upload-mcp` helper can't be used with a private Space.
 - **Local testing uses data URIs.** The SSRF guard also refuses `127.0.0.1` links, so the local MCP checks sent the clip as a `data:` URI.
 - **Gradio adds its own hint to each tool description.** It mentions an `upload_file_to_gradio` tool that this setup doesn't offer. Hosts ignore it when that tool is absent.
+- **Some hosts refuse the download.** Wikimedia answers 403 to the default `python-httpx` User-Agent that Gradio's downloader sends. The failure happens in Gradio's preprocessing, before our code runs, so the host sees only "The upstream Gradio app has raised an exception…". `launch(show_error=True)` would pass on the real reason, but this hasn't been changed.
 - **claude.ai needs a beta feature for private Spaces.** Sending the `Authorization` header from a claude.ai connector uses "Request headers", a beta limited to some organizations. Without it, claude.ai can't reach a private Space. Claude Code always can.
 
 ## Bugs fixed
@@ -100,8 +102,8 @@ Transcription no longer uses `InferenceClient`. It sends a direct `POST` to Deep
 
 ### v2_1 (MCP)
 
-6. **Make the Space private.** It is currently **public** (checked 2026-11-17: pages load without a token). Go to Space → Settings → Change visibility → Private. Do this before you push, so the MCP endpoint is never public. If the Space then fails to start, check whether your plan allows private ZeroGPU Spaces.
-7. **Push** `master` to deploy v2_1. No new secrets are needed.
-8. **Create a Read token** for Claude at <https://huggingface.co/settings/tokens>, separate from the Space's and GitHub's tokens.
-9. **Check the endpoint** with the `curl` in the README. It should list the two tools.
+6. ~~Make the Space private~~. Done; it still runs on ZeroGPU.
+7. ~~Push `master`~~. Done; the Space runs `566a466`.
+8. ~~Create a Read token~~. Done; it reads the Space and calls both tools.
+9. ~~Check the endpoint~~. Done; both tools are listed and work.
 10. **Add the connector** in claude.ai (Customize → Connectors → Add custom connector, header `authorization: Bearer hf_…`), or in Claude Code with `claude mcp add`. Then call `transcribe_french` with a direct public link to a French `.mp3`.
