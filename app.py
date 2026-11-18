@@ -32,4 +32,5 @@ except ConfigError as exc:
 demo = build_demo()
 
 if __name__ == "__main__":
-    demo.launch()
+    # Also serve the public API endpoints as MCP tools at /gradio_api/mcp/ (see README).
+    demo.launch(mcp_server=True)

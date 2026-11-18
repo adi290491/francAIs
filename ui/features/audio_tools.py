@@ -13,6 +13,12 @@ from ui.handlers import MODES, UPLOAD_MODE, audio_handler, clearing_fluency, tog
 # 6.30 ignores that choice). Run it once per page with `demo.load(None, js=MIC_DEVICE_JS)`.
 MIC_DEVICE_JS = (Path(__file__).parent / "mic_device.js").read_text(encoding="utf-8")
 
+# The button endpoints take (mode, upload, recording), which makes a confusing MCP tool, and
+# Gradio's MCP server lists every *public* endpoint. "undocumented" keeps `/transcribe` and
+# `/translate` callable by `gradio_client` but out of the API page and the MCP tool list;
+# `ui/features/mcp_tools.py` provides the clean one-file tools instead.
+BUTTON_API_VISIBILITY = "undocumented"
+
 
 def render(
     *,
@@ -44,10 +50,12 @@ def render(
         inputs=inputs,
         outputs=[output, fluency],
         api_name="transcribe",
+        api_visibility=BUTTON_API_VISIBILITY,
     )
     translate_btn.click(
         audio_handler(clearing_fluency(translate_fn), n_outputs=2),
         inputs=inputs,
         outputs=[output, fluency],
         api_name="translate",
+        api_visibility=BUTTON_API_VISIBILITY,
     )

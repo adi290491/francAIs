@@ -23,6 +23,7 @@ NO_FILE_MESSAGES: dict[AudioSource, str] = {
     "upload": "Please upload an .mp3 file first.",
     "recording": "Please record some audio first.",
 }
+NO_TOOL_FILE_MESSAGE = "Please provide an .mp3 or .wav audio file."
 GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again."
 
 
@@ -45,9 +46,8 @@ def audio_handler(
 ) -> Callable[[str, str | None, str | None], Any]:
     """Wrap `fn(audio_path, source=...)` as a handler taking `(mode, upload, recording)`.
 
-    - Active input empty: show a mode-specific warning, leave outputs unchanged, skip the call.
-    - `TutorError`: show its (user-safe) message.
-    - Anything else: log it and show a generic message (no stack traces in the UI).
+    Active input empty: show a mode-specific warning, leave outputs unchanged, skip the call.
+    Errors are mapped by `_call`.
     """
 
     def handler(mode: str, upload_path: str | None, recording_path: str | None) -> Any:
@@ -55,15 +55,39 @@ def audio_handler(
         if not path:
             gr.Warning(NO_FILE_MESSAGES[source])
             return gr.skip() if n_outputs == 1 else tuple(gr.skip() for _ in range(n_outputs))
-        try:
-            return fn(path, source=source)
-        except TutorError as exc:
-            raise gr.Error(str(exc), print_exception=False) from None
-        except Exception:
-            logger.exception("Unhandled error in %s", getattr(fn, "__name__", fn))
-            raise gr.Error(GENERIC_ERROR_MESSAGE, print_exception=False) from None
+        return _call(fn, path, source)
 
     return handler
+
+
+def tool_handler(fn: Callable[..., Any]) -> Callable[[str | None], Any]:
+    """Wrap `fn(audio_path, source="file")` for an API/MCP tool taking one audio path.
+
+    There is no UI to warn in, so a missing file is an error; otherwise errors are mapped
+    exactly as in `audio_handler`.
+    """
+
+    def handler(audio_path: str | None) -> Any:
+        if not audio_path:
+            raise gr.Error(NO_TOOL_FILE_MESSAGE, print_exception=False)
+        return _call(fn, audio_path, "file")
+
+    return handler
+
+
+def _call(fn: Callable[..., Any], path: str, source: AudioSource) -> Any:
+    """Run `fn(path, source=source)`, turning failures into user-safe `gr.Error`s.
+
+    - `TutorError`: show its (user-safe) message.
+    - Anything else: log it and show a generic message (no stack traces in the UI).
+    """
+    try:
+        return fn(path, source=source)
+    except TutorError as exc:
+        raise gr.Error(str(exc), print_exception=False) from None
+    except Exception:
+        logger.exception("Unhandled error in %s", getattr(fn, "__name__", fn))
+        raise gr.Error(GENERIC_ERROR_MESSAGE, print_exception=False) from None
 
 
 def clearing_fluency(fn: Callable[..., str]) -> Callable[..., tuple[str, str]]:

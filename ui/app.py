@@ -2,7 +2,7 @@
 
 import gradio as gr
 
-from ui.features import audio_tools
+from ui.features import audio_tools, mcp_tools
 
 TITLE = "French Tutor"
 DESCRIPTION = (
@@ -16,5 +16,6 @@ def build_demo() -> gr.Blocks:
     with gr.Blocks(title=TITLE) as demo:
         gr.Markdown(f"# {TITLE}\n{DESCRIPTION}")
         audio_tools.render()
+        mcp_tools.render()  # API-only: the tools an MCP host sees (no components)
         demo.load(None, js=audio_tools.MIC_DEVICE_JS, api_visibility="private")
     return demo
